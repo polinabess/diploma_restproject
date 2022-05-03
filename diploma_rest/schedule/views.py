@@ -14,6 +14,7 @@ class DictiListView(APIView):
         dictions = Dicti.objects.all()
         serializer = DictListSerializer(dictions, many=True)
         return Response(serializer.data)
+    # test
 
 
 class AddressListView(APIView):
