@@ -1,6 +1,8 @@
 from django.db import models
 from datetime import date
-from mptt.models import MPTTModel, TreeForeignKey
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from .utilities import study_file_parser
 
 
 class Dicti(models.Model):
@@ -169,36 +171,12 @@ class DictEduLvl(models.Model):
         verbose_name_plural = "Справочник Уровни образования"
 
 
-class DictEduPlanType(models.Model):
-    """Справочник ВидПлана из Уровень_образования"""
-    parent = models.ForeignKey(
-        'self', verbose_name="Родитель", on_delete=models.SET_NULL, blank=True, null=True
-    )
-    code = models.CharField("Символьный код", max_length=50, blank=True, null=True)
-    numcode = models.SmallIntegerField("Числовой код", blank=True, null=True)
-    shortname = models.CharField("Краткое наименование", max_length=50, blank=True, null=True)
-    fullname = models.CharField("Полное наименование", max_length=4000)
-    abbrname = models.CharField("Аббревиатура", max_length=50, blank=True, null=True)
-    constname = models.CharField("Константа", max_length=100, blank=True, null=True)
-    prefix = models.CharField("Префикс", max_length=50, blank=True, null=True)
-    active = models.BooleanField("Актуальность", default=True)
-    extid = models.CharField("код Gosinsp", max_length=100, blank=True, null=True)
-
-    def __str__(self):
-        return self.fullname
-
-    class Meta:
-        verbose_name = "Справочник Вид Плана образования"
-        verbose_name_plural = "Справочник Виды Планов образования"
-
-
 class DictEduQualifi(models.Model):
     """Справочник Уровень_Образования = квалификация"""
     parent = models.ForeignKey(
         'self', verbose_name="Родитель", on_delete=models.SET_NULL, blank=True, null=True
     )
-    edulevelplan = models.ForeignKey(DictEduPlanType, verbose_name="Вид плана", on_delete=models.SET_NULL,
-                                     blank=True, null=True, related_name="edulvlplan")
+    edulevelplan = models.CharField("Вид плана", max_length=200, blank=True, null=True)
     edutype = models.ForeignKey(DictEduLvl, verbose_name="Уровень образования (НПО, СПО, ВПО)", on_delete=models.SET_NULL,
                                 blank=True, null=True,  related_name="edu_type")
     code = models.CharField("Символьный код", max_length=50, blank=True, null=True)
@@ -348,6 +326,7 @@ class DictWorkKind(models.Model):
         verbose_name_plural = "Справочник Виды работ"
 
 
+# Нужна ли?
 class DictActKind(models.Model):
     """Справочник Виды Деятельности"""
     parent = models.ForeignKey(
@@ -440,7 +419,7 @@ class Faculty(models.Model):
     code = models.CharField("Код", max_length=50, blank=True, null=True)
     shortname = models.CharField("Краткое название", max_length=100, blank=True, null=True)
     fullname = models.CharField("Полное название", max_length=500)
-    branch = models.ForeignKey(Branch, verbose_name="Филиал", on_delete=models.CASCADE, null=False,
+    branch = models.ForeignKey(Branch, verbose_name="Филиал", on_delete=models.CASCADE, null=True,
                                related_name="facultybranch")
     address = models.ForeignKey(Address, verbose_name="Адрес", on_delete=models.SET_NULL, null=True,
                                 related_name="facaddr")
@@ -558,8 +537,39 @@ class Discipteacher(models.Model):
         verbose_name_plural = "Дисциплины преподавателей"
 
 
+class EduDirect(models.Model):
+    """Направление/Профиль подготовки (из файла "Учебный план" ООП diffgr:)"""
+    parent = models.ForeignKey(
+        'self', verbose_name="Родитель", on_delete=models.SET_NULL, blank=True, null=True
+    )
+    code = models.CharField("Шифр", max_length=50, blank=True, null=True)
+    directcode = models.CharField("Код ООП", max_length=50, blank=True, null=True)
+    shortname = models.CharField("Краткое название/Префикс", max_length=100, blank=True, null=True)
+    fullname = models.CharField("Название", max_length=500)
+    edulvl = models.ForeignKey(DictEduLvl, verbose_name="Уровень образования", on_delete=models.SET_NULL,
+                                 blank=True, null=True, related_name="education_lvl")
+    eduqualifi = models.ForeignKey(DictEduQualifi, verbose_name="Квалификация", on_delete=models.SET_NULL,
+                                   blank=True, null=True, related_name="qualification")
+    durationyear = models.PositiveSmallIntegerField("СрокЛет", default=1)
+    durationmonth = models.PositiveSmallIntegerField("СрокОбученияМесяцев", default=0)
+    fgosno = models.CharField("НомерДокумента", max_length=50, blank=True, null=True)
+    fgosdate = models.DateField("ДатаДокумента", blank=True, null=True)
+    attesttype = models.CharField("ТипГОСа", max_length=50, blank=True, null=True)
+    programprep = models.PositiveSmallIntegerField("Программа Подготовки", default=0)
+    active = models.BooleanField("Актуальность", default=True)
+    extid = models.CharField("код Gosinsp", max_length=100, blank=True, null=True)
+    parentextid = models.CharField("КодРодительскогоООП Gosinsp", max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.code} {self.fullname}"
+
+    class Meta:
+        verbose_name = "Направление подготовки"
+        verbose_name_plural = "Направления подготовки"
+
+
 class EduProgram(models.Model):
-    """Образовательная программа = Направление/Профиль подготовки (из файла "Учебный план" ООП diffgr:)"""
+    """Образовательная программа = (из файла "Учебный план" Планы diffgr:id)"""
     parent = models.ForeignKey(
         'self', verbose_name="Родитель", on_delete=models.SET_NULL, blank=True, null=True
     )
@@ -580,6 +590,8 @@ class EduProgram(models.Model):
     active = models.BooleanField("Актуальность", default=True)
     extid = models.CharField("код Gosinsp", max_length=100, blank=True, null=True)
     parentextid = models.CharField("КодРодительскогоООП Gosinsp", max_length=100, blank=True, null=True)
+    studydirect = models.ForeignKey(EduDirect, verbose_name="Направление/Профиль", on_delete=models.SET_NULL,
+                                 blank=True, null=True, related_name="edu_direct")
 
     def __str__(self):
         return f"{self.code} {self.fullname}"
@@ -621,7 +633,7 @@ class Studyfile(models.Model):
                                   blank=True, null=True, related_name="filetype")
     filestatus = models.ForeignKey(Dicti, verbose_name="Статус обработки файла", on_delete=models.SET_NULL,
                                    blank=True, null=True, related_name="filests")
-    title = models.CharField("Название файла", max_length=255)
+    title = models.CharField("Название файла", max_length=255, null=True, blank=True)
     filedate = models.DateField("ДатаДокумента", blank=True, null=True)
     courseamount = models.PositiveSmallIntegerField("ЧислоКурсов", default=7)
     semesoncourse = models.PositiveSmallIntegerField("СеместровНаКурсе", default=2)
@@ -632,8 +644,9 @@ class Studyfile(models.Model):
                                  blank=True, null=True, related_name="sfedulvl")
     eduqualifi = models.ForeignKey(DictEduQualifi, verbose_name="Квалификация", on_delete=models.SET_NULL,
                                    blank=True, null=True, related_name="sfqualifi")
-    filetext = models.TextField("Текст файла")
+    filetext = models.TextField("Текст файла", null=True, blank=True)
     active = models.BooleanField("Актуальность", default=True)
+    file = models.FileField(verbose_name="Файл", null=True)
 
     def __str__(self):
         return self.title
@@ -663,10 +676,10 @@ class Planprog(models.Model):
     planfile = models.ForeignKey(Studyfile, verbose_name="Файл", on_delete=models.SET_NULL, blank=True, null=True,
                                  related_name="planfile")
     period = models.ForeignKey(Studyperiod, verbose_name="УчебныйГод",
-                               on_delete=models.CASCADE, related_name="period")
+                               on_delete=models.CASCADE, related_name="period", null=True)
     yearstart = models.CharField("ГодНачалаПодготовки", max_length=10, blank=True, null=True)
     eduprog = models.ForeignKey(EduProgram, verbose_name="Образовательная программа", on_delete=models.CASCADE,
-                                related_name="studyprog")
+                                related_name="studyprog", null=True)
     title = models.TextField("Титул", max_length=500)
     eduform = models.ForeignKey(DictEduForm, verbose_name="Форма обучения", on_delete=models.SET_NULL,
                                 blank=True, null=True, related_name="planeduform")
@@ -677,7 +690,7 @@ class Planprog(models.Model):
     qualifi = models.ForeignKey(DictEduQualifi, verbose_name="Квалификация", on_delete=models.SET_NULL,
                                 blank=True, null=True, related_name="planskill")
     department = models.ForeignKey(Department, verbose_name="Кафедра", on_delete=models.CASCADE,
-                                   related_name="plandept")
+                                   related_name="plandept", null=True)
     specializ = models.ForeignKey(Dicti, verbose_name="Специализация", on_delete=models.SET_NULL,
                                   blank=True, null=True, related_name="specializ")
     isdistant = models.BooleanField("Дистанционное", default=False)
@@ -718,16 +731,16 @@ class Planprog(models.Model):
 class Planrow(models.Model):
     """Строка ПланыСтроки учебного плана из файла по программе на определенный год"""
     plan = models.ForeignKey(Planprog, verbose_name="План за определенный год", on_delete=models.CASCADE,
-                             related_name="rowplan")
+                             related_name="rowplan", null=True)
     discipline = models.ForeignKey(Discipline, verbose_name="дисциплина", on_delete=models.CASCADE,
-                                   related_name="rowdiscip")
+                                   related_name="rowdiscip", null=True)
     disciplinecode = models.CharField("Код дисциплины", max_length=50)
     objtype = models.ForeignKey(DictObjType, verbose_name="Тип объекта", on_delete=models.CASCADE,
-                                related_name="rowobjtype")
+                                related_name="rowobjtype", null=True)
     parentobjtype = models.ForeignKey(DictObjType, verbose_name="Родительский тип объекта", on_delete=models.SET_NULL,
                                       blank=True, null=True, related_name="rwparentobjtype")
     objkind = models.ForeignKey(DictObjKind, verbose_name="Вид Объекта", on_delete=models.CASCADE,
-                                related_name="rowobjkind")
+                                related_name="rowobjkind", null=True)
     isgym = models.BooleanField("ПризнакФизкультуры", default=False)
     ispractice = models.BooleanField("РассредПрактика", default=False)
     calcnozet = models.BooleanField("СчитатьБезЗЕТ", default=False)
@@ -767,16 +780,16 @@ class Planrow(models.Model):
 class Planhours(models.Model):
     """Строка ПланыНовыеЧасы по курсам/семестрам учебного плана из файла по программе на определенный год"""
     plan = models.ForeignKey(Planprog, verbose_name="План за определенный год", on_delete=models.CASCADE,
-                             related_name="hoursplan")
+                             related_name="hoursplan", null=True)
     discipline = models.ForeignKey(Discipline, verbose_name="Дисциплина", on_delete=models.CASCADE, default=0,
-                                   related_name="phdiscip")
+                                   related_name="phdiscip", null=True)
     parentrow = models.IntegerField("ссылка на строку-объект (дисциплину)-из табл.planrow", default=0)
     activitysubclass = models.ForeignKey(DictWorkKind, verbose_name="Вид работы по справочнику КодВидаРаботы",
-                                         on_delete=models.CASCADE, related_name="workkind")
+                                         on_delete=models.CASCADE, related_name="workkind", null=True)
     activityclass = models.ForeignKey(DictWorkType, verbose_name="Тип объекта", on_delete=models.CASCADE,
-                                      related_name="worktype")
+                                      related_name="worktype", null=True)
     hoursclass = models.ForeignKey(DictHoursType, verbose_name="Тип Часов", on_delete=models.CASCADE,
-                                   related_name="hoursclass")
+                                   related_name="hoursclass", null=True)
     course = models.PositiveSmallIntegerField("Курс", default=0)
     semester = models.PositiveSmallIntegerField("Семестр", default=0)
     session = models.PositiveSmallIntegerField("Сессия", default=0)
@@ -789,7 +802,7 @@ class Planhours(models.Model):
     parentrowcode = models.IntegerField("код строки-объекта (дисциплину)-из табл.planrow", default=0)
 
     def __str__(self):
-        return self.plan
+        return str(self.plan)
 
     class Meta:
         verbose_name = "Строка ПланыНовыеЧасы Учебного плана"
@@ -799,8 +812,8 @@ class Planhours(models.Model):
 class Plangraf(models.Model):
     """Строка ПланыГрафикиЯчейки по курсам/семестрам учебного плана из файла по программе на определенный год"""
     plan = models.ForeignKey(Planprog, verbose_name="План за определенный год", on_delete=models.CASCADE,
-                             related_name="grafplan")
-    activitykind = models.ForeignKey(DictActKind, verbose_name="Вид деятельности", on_delete=models.SET_NULL,
+                             related_name="grafplan", null=True)
+    activitykind = models.ForeignKey(DictWorkKind, verbose_name="Вид деятельности", on_delete=models.SET_NULL,
                                   blank=True, null=True, related_name="activ_kind")
     activitykindcode = models.PositiveSmallIntegerField("КодВидаДеятельности GosInsp", default=0)
     weeknum = models.IntegerField("НомерНедели", default=0)
@@ -819,3 +832,19 @@ class Plangraf(models.Model):
     class Meta:
         verbose_name = "Строка ПланыГрафикиЯчейки Учебного плана"
         verbose_name_plural = "Строки ПланыГрафикиЯчейки Учебного плана"
+
+
+# Перехват события загрузки файла в БД (ПОСЛЕ самой записи данных в базу)
+@receiver(post_save, sender=Studyfile)
+def upload_study_file(sender, instance, created, **kwargs):
+
+    if created:
+        # Распарсить файл и заполнить инфу о нем самом
+        study_file_parser.parse_file_to_db(instance)
+        instance.save()
+
+        # Проверить загружался ли уже файл с такими параметрами
+        study_file_parser.check_and_update_copy_file(instance)
+
+    # Обновить актуальность для программ, в зависимости от актуальности файла
+    study_file_parser.update_actual_info_for_file(instance)

@@ -1,9 +1,9 @@
 from django.contrib import admin
 
 from .models import Dicti, DictEduBase, DictObjType, DictObjKind, DictPracticeType, DictBlockType, DictEduLvl, \
-    DictEduPlanType, DictEduQualifi, DictEduForm, DictProgramLvl, DictHoursType, DictWorkType, DictWorkKind, DictActKind, \
+    DictEduQualifi, DictEduForm, DictProgramLvl, DictHoursType, DictWorkType, DictWorkKind, DictActKind, \
     Discipline, Address, Branch, Faculty, Department, Room, Subject, Depteacher, Discipteacher, EduProgram, EduGroup, \
-    Studyfile, Studyperiod, Planprog, Planrow, Planhours, Plangraf
+    Studyfile, Studyperiod, Planprog, Planrow, Planhours, Plangraf, EduDirect
 
 
 admin.site.register(Dicti)
@@ -13,7 +13,6 @@ admin.site.register(DictObjKind)
 admin.site.register(DictPracticeType)
 admin.site.register(DictBlockType)
 admin.site.register(DictEduLvl)
-admin.site.register(DictEduPlanType)
 admin.site.register(DictEduQualifi)
 admin.site.register(DictEduForm)
 admin.site.register(DictProgramLvl)
@@ -30,6 +29,7 @@ admin.site.register(Room)
 admin.site.register(Subject)
 admin.site.register(Depteacher)
 admin.site.register(Discipteacher)
+admin.site.register(EduDirect)
 admin.site.register(EduProgram)
 admin.site.register(EduGroup)
 admin.site.register(Studyfile)
