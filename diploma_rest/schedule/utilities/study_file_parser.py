@@ -1,6 +1,8 @@
 from bs4 import BeautifulSoup
 from datetime import datetime
 import schedule.models as models
+import schedule.utilities.logger as logger
+from w3lib.html import replace_entities
 
 
 def bool_convert(string):
@@ -1658,9 +1660,9 @@ def check_and_update_copy_file(instance):
     Функция, которая проверяет загружен ли новый файл или новая версия файла и изменяет его
     :param instance: запись о файле, который обновляется
     """
-    print("We're here!")
+
     if models.Studyfile.objects.filter(filetext=instance.filetext).count() == 1:
-        print("GOOD")
+
         tmp_dict_plan_prog = models.Planprog.objects.filter(planfile=instance).first()
 
         tmp_res = models.Planprog.objects.filter(period=tmp_dict_plan_prog.period,
@@ -1708,3 +1710,10 @@ def check_and_update_copy_file(instance):
             new_res.active = False
             new_res.save()
             update_actual_info_for_file(new_res)
+            logger.send_info_to_bot(str(replace_entities("&#8634;")) +
+                                    " Обновлен файл учебного расписания '" + new_res.title +
+                                    "'. Файл новой версии - '" + instance.title + "'")
+            return
+
+    logger.send_info_to_bot(str(replace_entities("&#10010;")) +
+                            " Загружен новый файл учебного расписания '" + instance.title + "'")

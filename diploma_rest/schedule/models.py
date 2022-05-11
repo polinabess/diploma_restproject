@@ -1,8 +1,11 @@
 from django.db import models
 from datetime import date
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from .utilities import study_file_parser
+from model_utils import FieldTracker
+import schedule.utilities.logger as logger
+from w3lib.html import replace_entities
 
 
 class Dicti(models.Model):
@@ -648,6 +651,8 @@ class Studyfile(models.Model):
     active = models.BooleanField("Актуальность", default=True)
     file = models.FileField(verbose_name="Файл", null=True)
 
+    tracker = FieldTracker()
+
     def __str__(self):
         return self.title
 
@@ -848,3 +853,7 @@ def upload_study_file(sender, instance, created, **kwargs):
 
     # Обновить актуальность для программ, в зависимости от актуальности файла
     study_file_parser.update_actual_info_for_file(instance)
+
+    if instance.tracker.has_changed('active') and not instance.active:
+        logger.send_info_to_bot(str(replace_entities("&#10006;")) +
+                                " Архивирован файл учебного расписания '" + instance.title + "'")
